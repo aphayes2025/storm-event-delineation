@@ -12,15 +12,45 @@ from datetime import datetime
 from datetime import timedelta
 import pandas as pd
 import numpy as np
+from sklearn.preprocessing import StandardScaler
+import seaborn as sns
 
 
 def get_date_from_day(year, day):
+    """
+    Converts a specific day of the year into a calendar date.
+
+    Parameters:
+        year (int or str): The year for which the day-of-year is provided.
+        day (int or str): The day of the year (1-based index).
+
+    Returns:
+        str: The date in 'MM/DD/YYYY' format.
+    """
     start_of_year = datetime.datetime(int(year), 1, 1)
     date = start_of_year + datetime.timedelta(int(day) - 1)
     return date.strftime('%m/%d/%Y')
 
+
+def get_prior_max_discharge(event_date, months_prior, df_copy):
+        """
+        Calculate the maximum discharge prior to a given date over a specified period in months.
+        
+        Args:
+            event_date (datetime): The event date to calculate prior from.
+            months_prior (int): Number of months prior to the event date.
+            df (DataFrame): DataFrame containing discharge data with a datetime column.
+        
+        Returns:
+            float: The maximum discharge value in the specified period.
+        """
+        start_date = event_date - pd.DateOffset(months=months_prior)
+        filtered_df = df_copy[(df_copy['Datetime'] >= start_date) & (df_copy['Datetime'] < event_date)]
+        max_discharge = filtered_df['Discharge (m^3/s)'].max()
+        return max_discharge
+
 if __name__ == "__main__":
-    csv = "USGS002_data.csv"
+    csv = "gauge-data/USGS002_data.csv"
     df = pd.read_csv(csv)
 
     df['Datetime'] = pd.to_datetime(df["Date"] + " " + df["Time"])
@@ -49,7 +79,7 @@ if __name__ == "__main__":
     m3s2cfs = 0.0283168
     df_copy['Discharge (m^3/s)'] = df_copy['Discharge (cfs)'] * m3s2cfs
 
-    csv_threshold = 'events_above_threshold002.csv'
+    csv_threshold = 'event-data/events_above_threshold002.csv'
     df_events_above_threshold = pd.read_csv(csv_threshold)
     #CHange to datetime
     df_events_above_threshold['max_Q_time'] = pd.to_datetime(df_events_above_threshold['max_Q_time'])
@@ -67,8 +97,6 @@ if __name__ == "__main__":
     flushing_index = df_events_above_threshold['flushing_index'].tolist()
     event_number = df_events_above_threshold['event number'].tolist()
 
-
-
     # =============================================================================
     # STORM ATTRIBUTES
     # =============================================================================   
@@ -77,13 +105,11 @@ if __name__ == "__main__":
     randomforest_df['flushing_index'] = flushing_index
     randomforest_df['Event Number'] = event_number
 
-
     # =============================================================================
     # #Season 
     # base theseason on month of the start of each event 
     # one-hot
     # =============================================================================
-
     winter = [0] * len(i_start)
     spring = [0] * len(i_start)
     summer = [0] * len(i_start)
@@ -105,6 +131,7 @@ if __name__ == "__main__":
     randomforest_df['Spring'] = pd.DataFrame(spring)
     randomforest_df['Summer'] = pd.DataFrame(summer)
     randomforest_df['Autumn'] = pd.DataFrame(autumn)
+
     #Leaf on/off ratio
     leaf_index = [] 
     for i in range(len(event_start_time)):
@@ -150,7 +177,6 @@ if __name__ == "__main__":
         diff = max_Q_time[i+1] - max_Q_time[i] # find time diff between discharge peaks
         time_btw_Q_peaks.append(diff)
 
-
     # =============================================================================
     # DAYMET ATTRIBUTES
     # =============================================================================   
@@ -160,7 +186,6 @@ if __name__ == "__main__":
     df_daymet['Date'] = df_daymet.apply(lambda row: get_date_from_day(row['year'], row['yday']), axis=1)
 
     #drop the other columns
-
     df_daymet.drop('year', axis=1, inplace=True)
     df_daymet.drop('yday', axis=1, inplace=True)
 
@@ -211,7 +236,6 @@ if __name__ == "__main__":
     randomforest_df['3-day Prior Precip (mm)'] = pd.DataFrame(three_days_precip)  
     randomforest_df['7-day Prior Precip (mm)'] = pd.DataFrame(seven_days_precip)
         
-        
     # =============================================================================
     # Daily Temperature for each event
     # avg over the event for:
@@ -243,7 +267,6 @@ if __name__ == "__main__":
     randomforest_df['Avg Daily Maximum Temp (deg c)'] = pd.DataFrame(max_avg_temp)  
     randomforest_df['Avg Daily Average Temp (deg c)'] = pd.DataFrame(avg_avg_temp)
 
-
     avgdayl = []
     for i in range(len(event_start_time)):
         
@@ -255,7 +278,6 @@ if __name__ == "__main__":
 
     #Add these means to the RandomForest DataFrame
     randomforest_df['Avg Day Length (s)'] = pd.Series(avgdayl)
-
 
     #Find avg vapor pressure over event
     avgvp = []
@@ -295,36 +317,13 @@ if __name__ == "__main__":
 
     #Add these means to the RandomForest DataFrame
     randomforest_df['Avg Swe (kg/m^2)'] = pd.Series(avgswe)
-
-
-
-
-    def get_prior_max_discharge(event_date, months_prior, df_copy):
-        """
-        Calculate the maximum discharge prior to a given date over a specified period in months.
-        
-        Args:
-            event_date (datetime): The event date to calculate prior from.
-            months_prior (int): Number of months prior to the event date.
-            df (DataFrame): DataFrame containing discharge data with a datetime column.
-        
-        Returns:
-            float: The maximum discharge value in the specified period.
-        """
-        start_date = event_date - pd.DateOffset(months=months_prior)
-        filtered_df = df_copy[(df_copy['Datetime'] >= start_date) & (df_copy['Datetime'] < event_date)]
-        max_discharge = filtered_df['Discharge (m^3/s)'].max()
-        return max_discharge
     randomforest_df['Max Discharge 3 Months Prior'] = df_events_above_threshold['event_start_time'].apply(lambda x: get_prior_max_discharge(x, 3, df_copy))
     randomforest_df['Max Discharge 6 Months Prior'] = df_events_above_threshold['event_start_time'].apply(lambda x: get_prior_max_discharge(x, 6, df_copy))
 
-
     #Scale variables
-    from sklearn.preprocessing import StandardScaler
     standard_scaler = StandardScaler()
     randomforest_df_scaled = pd.DataFrame(standard_scaler.fit_transform(randomforest_df), columns=randomforest_df.columns)
 
-    import seaborn as sns
     #Correlation plot
     correlation_matrix = randomforest_df.corr()
     plt.figure(figsize=(12, 10))  

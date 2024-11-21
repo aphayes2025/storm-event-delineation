@@ -200,6 +200,7 @@ def get_season(month):
 
 
 if __name__ == "__main__":
+    # converting 
     csv = "gauge-data/USGS002_data.csv"
     df = pd.read_csv(csv)
     df['Datetime'] = pd.to_datetime(df["Date"] + " " + df["Time"])
@@ -636,7 +637,6 @@ if __name__ == "__main__":
     valid_max_C_time = [time for time in max_C_time if pd.notna(time)]
     fig, ax1 = plt.subplots()
 
-
     ax1.scatter(max_Q_time, max_Q, color='b', label='Max. Discharge (cfs)')
     ax1.set_xlabel('Dates')
     ax1.set_ylabel('Discharge (m^3/s)', color='b')
@@ -666,9 +666,7 @@ if __name__ == "__main__":
         mode_season = mode(seasons)
         event_mode_seasons[event] = mode_season
         
-    
     season_counts = {'Winter': 0, 'Spring': 0, 'Summer': 0, 'Fall': 0}
-
 
     for mode_season in event_mode_seasons.values():
         season_counts[mode_season] += 1
